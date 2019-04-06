@@ -1,0 +1,122 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <unistd.h>
+#include <crypt.h>
+
+#define MAX_PASSWORD_LENGTH (7)
+
+typedef char password_t[MAX_PASSWORD_LENGTH + 1];
+
+typedef enum{
+    BM_ITER,
+    BM_REC,
+} brute_mode_t;
+
+typedef struct config_t{
+    char * alph;
+    char * hash;
+    int length;
+    brute_mode_t brute_mode;
+} config_t;
+
+int check_password (password_t password, config_t * config){
+    //if(config->hash == crypt_r(password, i)) return true;
+    if(crypt(password) == config->hash) return 1;
+    return 0;
+}
+int brk = 0;
+void rec_brute(password_t password, int pos, config_t * config){
+    if(brk != 0) return;
+    int i;
+    if (pos == config->length)
+        if(check_password (password, config)){
+            printf(password);
+            brk = 1;
+        }
+    else 
+        for(i = 0; config->alph[i]; i++){
+            if(brk != 0) break;
+            password[pos] = config->alph[i];
+            rec_brute(password, pos + 1, config);
+        }
+}
+
+void rec_brute_wrapper (config_t * config){
+    password_t password;
+    password[config.length] = 0;
+    rec_brute(password, 0, &config);
+}
+
+void ite_brute(config_t * config){
+    int alph_length_1 = strlen(config->alph) - 1;
+    int idx[config->length];
+    password_t password;
+    int i;
+    password[config->length] = 0;
+    
+    for(i = 0; i < config->length; i++){
+        idx[i] = 0;
+        password[i] = config->alph[0];
+    }
+    for(;;){
+        if(check_password (password, config))
+            printf(password);
+        for (i = config->length - 1; (i >= 0) && (idx[i] == alph_length_1); i--){
+            idx[i] = 0;
+            password[i] = config->alph[0];
+        }
+        if(i < 0)
+            break;
+        password[i] = config->alph[++idx[i]];
+    }
+}
+
+
+void parse_params (config_t * config, int argc, char * argv[]){
+    int opt;
+    while ((opt = getopt(argc, argv, "h:a:l:ir")) != -1){
+        switch (opt){
+            case 'i':
+                config->brute_mode = BM_ITER;
+                break;
+            case 'r':
+                config->brute_mode = BM_REC;
+                break;
+            case 'a':
+                config->alph = optarg;
+                break;
+            case 'h':
+                config->hash = optarg;
+                break;
+            case 'l':
+                config->length = atoi (optarg);
+                break;
+            default: /* '?' */
+                fprintf(stderr, "Usage: %s [-a alphabet] [-l length] [-i iterative way] [-r recursive way]\n", argv[0]);
+        }
+    }
+}
+
+int main (int argc, char * argv[]) {
+    config_t config = {
+        .alph = "abc",
+        .hash = "Eha0EKh4FncPs",
+        .length = 3,
+        .brute_mode = BM_REC,
+    };
+    
+    parse_params (&config, argc, argv);
+
+    switch (config.brute_mode){
+        case BM_REC:
+            rec_brute_wrapper (&config);
+            break;
+        case BM_ITER:
+            ite_brute (&config);
+            break;
+    }
+    return (EXIT_SUCCESS);
+}
+
